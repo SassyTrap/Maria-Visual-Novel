@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cookie Clicker Lite</title>
+    <title>Sky Typer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -15,36 +15,31 @@
 
     <div class="app">
       <header class="app__header">
-        <h1>Cookie Clicker Lite</h1>
-        <div class="save-indicator" title="Autosave status" aria-label="Autosave status" id="saveIndicator"></div>
+        <h1>Sky Typer</h1>
       </header>
 
       <section class="stats" aria-live="polite">
         <div class="stat">
-          <span class="stat__label">Cookies</span>
-          <span class="stat__value" id="cookiesCount">0</span>
+          <span class="stat__label">Score</span>
+          <span class="stat__value" id="scoreValue">0</span>
         </div>
         <div class="stat">
-          <span class="stat__label">Per Click</span>
-          <span class="stat__value" id="cookiesPerClick">1</span>
+          <span class="stat__label">Lives</span>
+          <span class="stat__value" id="livesValue">3</span>
         </div>
         <div class="stat">
-          <span class="stat__label">Per Second</span>
-          <span class="stat__value" id="cookiesPerSecond">0</span>
+          <span class="stat__label">Best</span>
+          <span class="stat__value" id="bestValue">0</span>
         </div>
         <button id="resetButton" class="btn btn--ghost" type="button">Reset</button>
       </section>
 
       <main class="game">
-        <button id="cookieButton" class="cookie" type="button" aria-label="Big cookie">
-          <span class="cookie__emoji">🍪</span>
-        </button>
+        <div id="gameArea" class="playfield" aria-label="Falling words playfield"></div>
+        <div class="prompt">
+          <input id="promptInput" class="prompt__input" type="text" placeholder="Type a word and press Enter…" autocomplete="off" spellcheck="false" />
+        </div>
       </main>
-
-      <section class="shop">
-        <h2>Shop</h2>
-        <div id="shopList" class="shop__grid"></div>
-      </section>
 
       <footer class="footer">
         <span>Made with ❤️</span>
