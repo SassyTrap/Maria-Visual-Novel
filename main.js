@@ -3,7 +3,7 @@
 /**
  * Omni Prompt — Omni‑Man GIF matcher
  * - Matches a user prompt to a fitting Omni‑Man GIF every time
- * - Uses Tenor API if key present, otherwise curated local list
+ * - Uses Tenor API if key present, otherwise curated local list or user uploads
  * - Lightweight semantic scoring via keyword synonyms
  */
 
@@ -17,6 +17,8 @@ const dom = {
   gifImage: /** @type {HTMLImageElement} */ (document.getElementById("gifImage")),
   matchLabel: /** @type {HTMLSpanElement} */ (document.getElementById("matchLabel")),
   downloadBtn: /** @type {HTMLButtonElement} */ (document.getElementById("downloadBtn")),
+  uploadBtn: /** @type {HTMLButtonElement} */ (document.getElementById("uploadBtn")),
+  gifPicker: /** @type {HTMLInputElement} */ (document.getElementById("gifPicker")),
 };
 
 /** Config */
@@ -26,58 +28,22 @@ const TENOR_ENDPOINT = "https://tenor.googleapis.com/v2/search";
 
 /** Curated Omni‑Man GIFs (fallback + for keyword matching) */
 /** @type {{url: string, title: string, tags: string[]}[]} */
-const CURATED = [
-  {
-    url: "https://media.tenor.com/lkMhn74KpHMAAAAC/omni-man-think-mark.gif",
-    title: "Think, Mark",
-    tags: ["think", "mark", "lecture", "explain", "logic", "disappointed", "serious", "talk"],
-  },
-  {
-    url: "https://media.tenor.com/3fh0Qb5fVJ0AAAAC/omniman-angry.gif",
-    title: "Angry Omni‑Man",
-    tags: ["angry", "rage", "furious", "mad", "blood", "fight", "violence", "intense"],
-  },
-  {
-    url: "https://media.tenor.com/sit5zM1q9zoAAAAC/omniman-smirk.gif",
-    title: "Smug Smirk",
-    tags: ["smug", "smirk", "confident", "cocky", "superior", "arrogant", "calm"],
-  },
-  {
-    url: "https://media.tenor.com/G8tS8QeH5woAAAAC/omni-man-proud.gif",
-    title: "Proud but Stern",
-    tags: ["proud", "stern", "father", "mentor", "pride", "disappointed", "serious"],
-  },
-  {
-    url: "https://media.tenor.com/9w8eQ5CqXrUAAAAC/omni-man-menacing.gif",
-    title: "Menacing Glow",
-    tags: ["menacing", "glow", "eyes", "threat", "ominous", "power", "danger"],
-  },
-  {
-    url: "https://media.tenor.com/Vf5q0hO5r9wAAAAC/omni-man-wipe.gif",
-    title: "Wipe Face Blood",
-    tags: ["wipe", "blood", "battle", "calm", "cold", "ruthless", "post fight"],
-  },
-  {
-    url: "https://media.tenor.com/nP1oQLs5y7MAAAAC/omni-man-fly.gif",
-    title: "Fly Off",
-    tags: ["fly", "leave", "done", "goodbye", "exit", "swift", "fast"],
-  },
-  {
-    url: "https://media.tenor.com/4Rz0m2O5XqMAAAAC/omni-man-nod.gif",
-    title: "Approving Nod",
-    tags: ["nod", "approve", "ok", "respect", "acknowledge", "agree"],
-  },
-  {
-    url: "https://media.tenor.com/1V7tw0nR8UoAAAAC/omni-man-smile.gif",
-    title: "Soft Smile",
-    tags: ["smile", "soft", "warm", "friendly", "calm", "gentle"],
-  },
-  {
-    url: "https://media.tenor.com/4M2JkE9bq24AAAAC/omni-man-violent.gif",
-    title: "Brutal Hit",
-    tags: ["punch", "hit", "violent", "brutal", "fight", "destroy", "attack"],
-  },
+let CURATED = [
+  { url: "assets/omni/think-mark.gif", title: "Think, Mark", tags: ["think", "mark", "lecture", "explain", "logic", "disappointed", "serious", "talk"] },
+  { url: "assets/omni/angry.gif", title: "Angry Omni‑Man", tags: ["angry", "rage", "furious", "mad", "blood", "fight", "violence", "intense"] },
+  { url: "assets/omni/smirk.gif", title: "Smug Smirk", tags: ["smug", "smirk", "confident", "cocky", "superior", "arrogant", "calm"] },
+  { url: "assets/omni/proud.gif", title: "Proud but Stern", tags: ["proud", "stern", "father", "mentor", "pride", "disappointed", "serious"] },
+  { url: "assets/omni/menacing.gif", title: "Menacing Glow", tags: ["menacing", "glow", "eyes", "threat", "ominous", "power", "danger"] },
+  { url: "assets/omni/wipe.gif", title: "Wipe Face Blood", tags: ["wipe", "blood", "battle", "calm", "cold", "ruthless", "post fight"] },
+  { url: "assets/omni/fly.gif", title: "Fly Off", tags: ["fly", "leave", "done", "goodbye", "exit", "swift", "fast"] },
+  { url: "assets/omni/nod.gif", title: "Approving Nod", tags: ["nod", "approve", "ok", "respect", "acknowledge", "agree"] },
+  { url: "assets/omni/smile.gif", title: "Soft Smile", tags: ["smile", "soft", "warm", "friendly", "calm", "gentle"] },
+  { url: "assets/omni/punch.gif", title: "Brutal Hit", tags: ["punch", "hit", "violent", "brutal", "fight", "destroy", "attack"] },
 ];
+
+/** User uploaded GIFs with inferred tags */
+/** @type {{url: string, title: string, tags: string[]}[]} */
+let USER_GIFS = [];
 
 /** Simple keyword expansions for better matching */
 const SYNONYMS = new Map([
@@ -122,7 +88,6 @@ function scoreGif(prompt, item) {
       if (t.includes(term) || term.includes(t)) score += 1;
     }
   }
-  // Boost exact phrase overlap in title
   const joined = item.title.toLowerCase();
   for (const term of terms) if (joined.includes(term)) score += 2;
   return score;
@@ -146,7 +111,6 @@ async function searchTenor(prompt) {
       mapped.push({ url: gif, title, tags: tokenize(`${title} ${prompt} omni man`) });
     }
   }
-  // Ensure only Omni‑Man content
   return mapped.filter(m => /omni.?man|invincible|nolan/i.test(m.title) || /omni/i.test(m.title));
 }
 
@@ -157,7 +121,7 @@ function pickBest(prompt, candidates) {
     const s = scoreGif(prompt, c);
     if (s > bestScore) { best = c; bestScore = s; }
   }
-  if (bestScore < 3) {
+  if (bestScore < 3 && candidates !== CURATED) {
     return pickBest(prompt, CURATED);
   }
   return best;
@@ -172,13 +136,13 @@ async function showMatch(prompt) {
   dom.matchLabel.textContent = "Finding the perfect Omni‑Man vibe…";
   try {
     const remote = await searchTenor(prompt);
-    const pool = remote.length ? remote : CURATED;
+    const pool = (USER_GIFS.length ? USER_GIFS : []).concat(remote.length ? remote : CURATED);
     const best = pickBest(prompt, pool);
     await displayGif(best);
     dom.matchLabel.textContent = best.title;
     dom.downloadBtn.onclick = () => downloadGif(best.url, friendlyFilename(prompt, best.title));
   } catch (e) {
-    dom.matchLabel.textContent = "Could not load GIF. Check your internet or ad‑blockers.";
+    dom.matchLabel.textContent = "Could not load GIF. Try adding local Omni‑Man GIFs.";
   } finally {
     setLoading(false);
   }
@@ -223,6 +187,19 @@ function bindEvents() {
       onSubmit();
     }
   });
+  dom.uploadBtn.addEventListener("click", () => dom.gifPicker.click());
+  dom.gifPicker.addEventListener("change", async () => {
+    if (!dom.gifPicker.files || dom.gifPicker.files.length === 0) return;
+    const added = [];
+    for (const file of Array.from(dom.gifPicker.files)) {
+      const url = URL.createObjectURL(file);
+      const base = file.name.replace(/\.[^.]+$/, "");
+      const title = base.replace(/[-_]+/g, " ");
+      added.push({ url, title, tags: tokenize(title + " omni man") });
+    }
+    USER_GIFS = USER_GIFS.concat(added);
+    if (dom.promptInput.value.trim()) onSubmit();
+  });
 }
 
 function onSubmit() {
@@ -233,7 +210,6 @@ function onSubmit() {
 
 function boot() {
   bindEvents();
-  // initial render from curated to show something nice
   showMatch("think, Mark");
 }
 

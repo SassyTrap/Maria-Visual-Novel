@@ -90,6 +90,9 @@ body {
 .match__label { color: var(--muted); font-size: 12px; }
 .match__value { display: inline-block; font-weight: 800; margin-left: 8px; }
 
+.uploader { display: flex; align-items: center; gap: 8px; }
+.uploader__hint { color: var(--muted); font-size: 12px; }
+
 /* Prompt */
 .prompt { display: grid; gap: 10px; }
 .prompt__bar { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
