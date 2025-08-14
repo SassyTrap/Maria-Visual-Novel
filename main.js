@@ -1,299 +1,266 @@
 "use strict";
 
-const STORAGE_KEY = "cc-lite-save-v1";
-const SAVE_INTERVAL_MS = 4000;
-
-/** @typedef {{ id: string, name: string, description: string, type: 'cpc'|'cps', cpc?: number, cps?: number, baseCost: number, costMultiplier: number }} UpgradeDef */
-/** @typedef {{ [id: string]: number }} UpgradeCounts */
-
-/** @type {UpgradeDef[]} */
-const UPGRADE_DEFS = [
-  { id: "cursor", name: "Cursor", description: "+1 cookie per click", type: "cpc", cpc: 1, baseCost: 15, costMultiplier: 1.15 },
-  { id: "grandma", name: "Grandma", description: "Bakes 0.2 cookies/sec", type: "cps", cps: 0.2, baseCost: 100, costMultiplier: 1.15 },
-  { id: "farm", name: "Farm", description: "Yields 1 cookie/sec", type: "cps", cps: 1, baseCost: 1100, costMultiplier: 1.15 },
-  { id: "factory", name: "Factory", description: "Produces 8 cookies/sec", type: "cps", cps: 8, baseCost: 13000, costMultiplier: 1.15 },
-  { id: "mine", name: "Mine", description: "Extracts 47 cookies/sec", type: "cps", cps: 47, baseCost: 120000, costMultiplier: 1.15 }
-];
+/** @typedef {{ id: number, text: string, x: number, y: number, speed: number, el: HTMLDivElement }} FallingWord */
 
 const dom = {
-  cookiesCount: /** @type {HTMLSpanElement} */ (document.getElementById("cookiesCount")),
-  cookiesPerClick: /** @type {HTMLSpanElement} */ (document.getElementById("cookiesPerClick")),
-  cookiesPerSecond: /** @type {HTMLSpanElement} */ (document.getElementById("cookiesPerSecond")),
-  cookieButton: /** @type {HTMLButtonElement} */ (document.getElementById("cookieButton")),
-  shopList: /** @type {HTMLDivElement} */ (document.getElementById("shopList")),
+  scoreValue: /** @type {HTMLSpanElement} */ (document.getElementById("scoreValue")),
+  livesValue: /** @type {HTMLSpanElement} */ (document.getElementById("livesValue")),
+  bestValue: /** @type {HTMLSpanElement} */ (document.getElementById("bestValue")),
   resetButton: /** @type {HTMLButtonElement} */ (document.getElementById("resetButton")),
-  saveIndicator: /** @type {HTMLDivElement} */ (document.getElementById("saveIndicator"))
+  gameArea: /** @type {HTMLDivElement} */ (document.getElementById("gameArea")),
+  promptInput: /** @type {HTMLInputElement} */ (document.getElementById("promptInput")),
 };
 
-/** @type {{
- *   cookies: number,
- *   totalCookies: number,
- *   upgradeCounts: UpgradeCounts,
- *   lastTickMs: number
- * }} */
-const gameState = {
-  cookies: 0,
-  totalCookies: 0,
-  upgradeCounts: {},
-  lastTickMs: performance.now()
+const STORAGE_KEY = "sky-typer-best-v1";
+
+/** @type {{ score: number, lives: number, best: number, isGameOver: boolean, lastTickMs: number, nextId: number, spawnCooldown: number, spawnInterval: number, speedMultiplier: number }} */
+const game = {
+  score: 0,
+  lives: 3,
+  best: 0,
+  isGameOver: false,
+  lastTickMs: performance.now(),
+  nextId: 1,
+  spawnCooldown: 0,
+  spawnInterval: 1200,
+  speedMultiplier: 1,
 };
 
-let latestComputedCpc = 1;
-let latestComputedCps = 0;
-let lastSaveMs = 0;
-let isSaving = false;
+/** @type {FallingWord[]} */
+let words = [];
+
+/** Basic word list. Keep short and readable. */
+const WORDS = [
+  "sun", "moon", "star", "sky", "cloud", "rain", "wind", "storm", "light",
+  "code", "array", "class", "loop", "bug", "stack", "node", "react", "state",
+  "fast", "slow", "crisp", "sweet", "spice", "water", "stone", "metal", "wood",
+  "blue", "green", "red", "gold", "violet", "cyan", "white", "black", "silver",
+  "type", "word", "game", "skill", "focus", "quick", "zebra", "quake", "jazz"
+];
 
 function initialize() {
-  // Initialize upgrade counts
-  for (const def of UPGRADE_DEFS) {
-    if (gameState.upgradeCounts[def.id] == null) {
-      gameState.upgradeCounts[def.id] = 0;
-    }
-  }
-
-  loadSave();
-  buildShop();
+  loadBest();
+  updateHud();
   bindEvents();
-  updateComputedRates();
-  updateUi();
-  requestAnimationFrame(gameLoop);
+  focusPrompt();
+  requestAnimationFrame(loop);
 }
 
 function bindEvents() {
-  dom.cookieButton.addEventListener("click", onCookieClicked);
   dom.resetButton.addEventListener("click", resetGame);
-  window.addEventListener("beforeunload", () => saveNow());
+  dom.promptInput.addEventListener("keydown", onPromptKey);
+  window.addEventListener("click", () => focusPrompt());
+  window.addEventListener("resize", clampAllToBounds);
 }
 
-function onCookieClicked(ev) {
-  addCookies(latestComputedCpc);
-  spawnGainLabel(ev);
-  // brief press feedback class could be added here
-}
-
-function addCookies(amount) {
-  gameState.cookies += amount;
-  gameState.totalCookies += amount;
-  updateUi();
-  scheduleSave();
-}
-
-function spendCookies(amount) {
-  gameState.cookies -= amount;
-  updateUi();
-  scheduleSave();
+function focusPrompt() {
+  if (!game.isGameOver) dom.promptInput?.focus();
 }
 
 function resetGame() {
-  const confirmText = "Reset your progress? This cannot be undone.";
-  if (!confirm(confirmText)) return;
-  localStorage.removeItem(STORAGE_KEY);
-  gameState.cookies = 0;
-  gameState.totalCookies = 0;
-  for (const def of UPGRADE_DEFS) gameState.upgradeCounts[def.id] = 0;
-  updateComputedRates();
-  updateUi();
+  game.score = 0;
+  game.lives = 3;
+  game.isGameOver = false;
+  game.spawnInterval = 1200;
+  game.speedMultiplier = 1;
+  clearAllWords();
+  // remove any lingering overlays
+  const overlays = Array.from(dom.gameArea.querySelectorAll('.miss-flash'));
+  overlays.forEach(el => el.remove());
+  updateHud();
+  focusPrompt();
 }
 
-function buildShop() {
-  dom.shopList.innerHTML = "";
-  for (const def of UPGRADE_DEFS) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("div");
-    title.className = "card__title";
-    title.textContent = def.name;
-
-    const desc = document.createElement("div");
-    desc.className = "card__desc";
-    desc.textContent = def.description;
-
-    const meta = document.createElement("div");
-    meta.className = "card__meta";
-
-    const owned = document.createElement("span");
-    owned.className = "badge";
-    owned.id = `owned-${def.id}`;
-    owned.textContent = `Owned: ${gameState.upgradeCounts[def.id]}`;
-
-    const effect = document.createElement("span");
-    effect.id = `effect-${def.id}`;
-    effect.textContent = effectText(def);
-
-    meta.appendChild(owned);
-    meta.appendChild(effect);
-
-    const actions = document.createElement("div");
-    actions.className = "card__actions";
-
-    const price = document.createElement("div");
-    price.className = "price";
-    price.id = `price-${def.id}`;
-    price.textContent = `Cost: ${formatNumber(nextCost(def))}`;
-
-    const buy = document.createElement("button");
-    buy.className = "btn";
-    buy.id = `buy-${def.id}`;
-    buy.textContent = "Buy";
-    buy.addEventListener("click", () => tryBuy(def));
-
-    actions.appendChild(buy);
-    actions.appendChild(price);
-
-    card.appendChild(title);
-    card.appendChild(desc);
-    card.appendChild(meta);
-    card.appendChild(actions);
-
-    dom.shopList.appendChild(card);
-  }
-}
-
-function tryBuy(def) {
-  const cost = nextCost(def);
-  if (gameState.cookies < cost) return;
-  spendCookies(cost);
-  gameState.upgradeCounts[def.id] += 1;
-  updateComputedRates();
-  updateUi();
-}
-
-function nextCost(def) {
-  const count = gameState.upgradeCounts[def.id] || 0;
-  const cost = def.baseCost * Math.pow(def.costMultiplier, count);
-  return Math.floor(cost);
-}
-
-function effectText(def) {
-  if (def.type === "cpc") return `+${def.cpc} / click`;
-  return `+${def.cps} / sec`;
-}
-
-function updateComputedRates() {
-  let cpc = 1; // base click
-  let cps = 0;
-  for (const def of UPGRADE_DEFS) {
-    const count = gameState.upgradeCounts[def.id] || 0;
-    if (def.type === "cpc") cpc += (def.cpc || 0) * count;
-    if (def.type === "cps") cps += (def.cps || 0) * count;
-  }
-  latestComputedCpc = cpc;
-  latestComputedCps = cps;
-}
-
-function updateUi() {
-  dom.cookiesCount.textContent = formatNumber(gameState.cookies);
-  dom.cookiesPerClick.textContent = formatNumber(latestComputedCpc);
-  dom.cookiesPerSecond.textContent = formatNumber(latestComputedCps);
-
-  for (const def of UPGRADE_DEFS) {
-    const ownedEl = /** @type {HTMLElement} */ (document.getElementById(`owned-${def.id}`));
-    const priceEl = /** @type {HTMLElement} */ (document.getElementById(`price-${def.id}`));
-    const buyBtn = /** @type {HTMLButtonElement} */ (document.getElementById(`buy-${def.id}`));
-    const effectEl = /** @type {HTMLElement} */ (document.getElementById(`effect-${def.id}`));
-
-    if (ownedEl) ownedEl.textContent = `Owned: ${gameState.upgradeCounts[def.id]}`;
-    if (priceEl) priceEl.textContent = `Cost: ${formatNumber(nextCost(def))}`;
-    if (effectEl) effectEl.textContent = effectText(def);
-    if (buyBtn) buyBtn.disabled = gameState.cookies < nextCost(def);
-  }
-}
-
-function gameLoop(nowMs) {
-  const dtSec = Math.max(0, (nowMs - gameState.lastTickMs) / 1000);
-  gameState.lastTickMs = nowMs;
-
-  if (latestComputedCps > 0 && dtSec > 0) {
-    addCookies(latestComputedCps * dtSec);
-  }
-
-  requestAnimationFrame(gameLoop);
-}
-
-function scheduleSave() {
-  const now = performance.now();
-  if (now - lastSaveMs < SAVE_INTERVAL_MS) return;
-  lastSaveMs = now;
-  saveSoon();
-}
-
-function saveSoon() {
-  isSaving = true;
-  updateSaveIndicator();
-  setTimeout(() => saveNow(), 100); // small debounce for burst updates
-}
-
-function saveNow() {
-  try {
-    const toSave = {
-      cookies: gameState.cookies,
-      totalCookies: gameState.totalCookies,
-      upgradeCounts: gameState.upgradeCounts,
-      t: Date.now()
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-  } catch (e) {
-    console.warn("Save failed", e);
-  } finally {
-    isSaving = false;
-    updateSaveIndicator();
-  }
-}
-
-function loadSave() {
+function loadBest() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (typeof parsed.cookies === "number") gameState.cookies = parsed.cookies;
-    if (typeof parsed.totalCookies === "number") gameState.totalCookies = parsed.totalCookies;
-    if (parsed.upgradeCounts && typeof parsed.upgradeCounts === "object") {
-      for (const def of UPGRADE_DEFS) {
-        const v = parsed.upgradeCounts[def.id];
-        if (typeof v === "number" && isFinite(v) && v >= 0) {
-          gameState.upgradeCounts[def.id] = v;
-        }
-      }
+    if (typeof parsed.best === "number") game.best = parsed.best;
+  } catch {}
+}
+
+function saveBest() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ best: game.best, t: Date.now() }));
+  } catch {}
+}
+
+function updateHud() {
+  dom.scoreValue.textContent = String(game.score);
+  dom.livesValue.textContent = String(game.lives);
+  dom.bestValue.textContent = String(game.best);
+}
+
+function onPromptKey(ev) {
+  if (ev.key === "Enter") {
+    const value = dom.promptInput.value.trim().toLowerCase();
+    if (value.length === 0) return;
+    trySubmit(value);
+    dom.promptInput.value = "";
+  }
+}
+
+function trySubmit(value) {
+  // Target the lowest matching word (closest to the bottom)
+  let targetIndex = -1;
+  let maxY = -Infinity;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (w.text === value && w.y > maxY) {
+      maxY = w.y;
+      targetIndex = i;
     }
-  } catch (e) {
-    console.warn("Load failed", e);
+  }
+  if (targetIndex >= 0) {
+    const hit = words[targetIndex];
+    awardScore(hit);
+    spawnHitEffect(hit.x, hit.y);
+    removeWord(hit.id);
+  } else {
+    flashMiss();
   }
 }
 
-function updateSaveIndicator() {
-  dom.saveIndicator.classList.toggle("save-indicator--busy", isSaving);
-  dom.saveIndicator.classList.toggle("save-indicator--ok", !isSaving);
-}
-
-function spawnGainLabel(ev) {
-  const amount = `+${formatNumber(latestComputedCpc)}`;
-  const span = document.createElement("span");
-  span.className = "gain";
-  span.textContent = amount;
-
-  const rect = dom.cookieButton.getBoundingClientRect();
-  const x = (ev.clientX || (rect.left + rect.width / 2));
-  const y = (ev.clientY || (rect.top + rect.height / 2));
-
-  span.style.left = `${x}px`;
-  span.style.top = `${y}px`;
-
-  document.body.appendChild(span);
-  setTimeout(() => span.remove(), 1000);
-}
-
-function formatNumber(n) {
-  if (!isFinite(n)) return "0";
-  if (n < 1000) return n % 1 === 0 ? String(n) : n.toFixed(1);
-  const units = ["K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc"];
-  let unitIndex = -1;
-  let value = n;
-  while (value >= 1000 && unitIndex < units.length - 1) {
-    value /= 1000;
-    unitIndex++;
+function awardScore(word) {
+  const base = 10 + Math.floor(word.text.length * 2);
+  const depthBonus = Math.floor((word.y / dom.gameArea.clientHeight) * 10);
+  game.score += base + depthBonus;
+  if (game.score > game.best) {
+    game.best = game.score;
+    saveBest();
   }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)}${units[unitIndex] || ""}`;
+  increaseDifficulty();
+  updateHud();
+}
+
+function increaseDifficulty() {
+  // Make spawns faster and falling faster as score increases
+  const minInterval = 400;
+  const speedCap = 3.5;
+  if (game.spawnInterval > minInterval) game.spawnInterval = Math.max(minInterval, 1200 - game.score * 2);
+  game.speedMultiplier = Math.min(speedCap, 1 + game.score / 400);
+}
+
+function loop(now) {
+  const dtMs = Math.max(0, now - game.lastTickMs);
+  game.lastTickMs = now;
+  if (!game.isGameOver) {
+    updateSpawn(dtMs);
+    updateWords(dtMs);
+  }
+  requestAnimationFrame(loop);
+}
+
+function updateSpawn(dtMs) {
+  game.spawnCooldown -= dtMs;
+  if (game.spawnCooldown <= 0) {
+    spawnWord();
+    game.spawnCooldown = game.spawnInterval;
+  }
+}
+
+function spawnWord() {
+  const text = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const padding = 30;
+  const x = padding + Math.random() * Math.max(0, dom.gameArea.clientWidth - padding * 2);
+  const y = -20;
+  const baseSpeed = 60 + Math.random() * 60; // px/s
+  const speed = baseSpeed * game.speedMultiplier;
+  const id = game.nextId++;
+  const el = document.createElement("div");
+  el.className = "word";
+  el.textContent = text;
+  dom.gameArea.appendChild(el);
+  const node = { id, text, x, y, speed, el };
+  words.push(node);
+  positionWord(node);
+}
+
+function updateWords(dtMs) {
+  const dt = dtMs / 1000;
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i];
+    w.y += w.speed * dt;
+    positionWord(w);
+    if (w.y > dom.gameArea.clientHeight + 20) {
+      // Missed
+      loseLife();
+      removeWord(w.id);
+    }
+  }
+}
+
+function positionWord(w) {
+  w.el.style.left = `${w.x}px`;
+  w.el.style.top = `${w.y}px`;
+}
+
+function removeWord(id) {
+  const idx = words.findIndex(w => w.id === id);
+  if (idx >= 0) {
+    const [w] = words.splice(idx, 1);
+    w.el.remove();
+  }
+}
+
+function clearAllWords() {
+  for (const w of words) w.el.remove();
+  words = [];
+}
+
+function loseLife() {
+  if (game.isGameOver) return;
+  game.lives -= 1;
+  updateHud();
+  flashMiss();
+  if (game.lives <= 0) {
+    endGame();
+  }
+}
+
+function endGame() {
+  game.isGameOver = true;
+  showGameOver();
+}
+
+function showGameOver() {
+  const banner = document.createElement("div");
+  banner.className = "miss-flash";
+  banner.style.display = "grid";
+  banner.style.placeItems = "center";
+  banner.style.fontWeight = "800";
+  banner.style.fontSize = "22px";
+  banner.textContent = `Game Over – Score ${game.score} · Best ${game.best} · Click or press Reset to play again`;
+  dom.gameArea.appendChild(banner);
+  setTimeout(() => {
+    if (!game.isGameOver) banner.remove();
+  }, 2000);
+}
+
+function flashMiss() {
+  const flash = document.createElement("div");
+  flash.className = "miss-flash";
+  dom.gameArea.appendChild(flash);
+  setTimeout(() => flash.remove(), 400);
+}
+
+function spawnHitEffect(x, y) {
+  const spark = document.createElement("div");
+  spark.className = "hit-spark";
+  spark.style.left = `${x}px`;
+  spark.style.top = `${y}px`;
+  dom.gameArea.appendChild(spark);
+  setTimeout(() => spark.remove(), 600);
+}
+
+function clampAllToBounds() {
+  const width = dom.gameArea.clientWidth;
+  const padding = 20;
+  for (const w of words) {
+    w.x = Math.min(width - padding, Math.max(padding, w.x));
+    positionWord(w);
+  }
 }
 
 // Boot
