@@ -25,6 +25,9 @@ const dom = {
 const TENOR_API_KEY = (window.OMNI_TENOR_KEY || "").trim();
 const TENOR_CLIENT_KEY = "omni-prompt-tool";
 const TENOR_ENDPOINT = "https://tenor.googleapis.com/v2/search";
+// Add Giphy provider for real-time fetching too
+const GIPHY_API_KEY = (window.OMNI_GIPHY_KEY || "").trim();
+const GIPHY_ENDPOINT = "https://api.giphy.com/v1/gifs/search";
 
 /** Curated Omni‑Man GIFs (fallback + for keyword matching) */
 /** @type {{url: string, title: string, tags: string[]}[]} */
@@ -114,6 +117,50 @@ async function searchTenor(prompt) {
   return mapped.filter(m => /omni.?man|invincible|nolan/i.test(m.title) || /omni/i.test(m.title));
 }
 
+// New: Giphy provider
+async function searchGiphy(prompt) {
+  if (!GIPHY_API_KEY) return [];
+  const q = encodeURIComponent(`omni man ${prompt}`);
+  const url = `${GIPHY_ENDPOINT}?api_key=${GIPHY_API_KEY}&q=${q}&limit=12&rating=pg-13&lang=en`;
+  const resp = await fetch(url);
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  /** @type {{url: string, title: string, tags: string[]}[]} */
+  const mapped = [];
+  if (Array.isArray(data.data)) {
+    for (const g of data.data) {
+      const gif = g.images?.original?.url || g.images?.downsized?.url || g.embed_url;
+      if (!gif) continue;
+      const title = (g.title || g.slug || "Omni‑Man").replace(/GIF by .*$/i, "").trim();
+      // Ensure likely Omni‑Man content by title/slug heuristics
+      const ok = /omni.?man|invincible|nolan/i.test(title) || /omni.?man|invincible/i.test(g.slug || "");
+      if (!ok) continue;
+      mapped.push({ url: gif, title, tags: tokenize(`${title} ${prompt} omni man`) });
+    }
+  }
+  return mapped;
+}
+
+// New: combined real-time search across providers
+async function searchAllProviders(prompt) {
+  const tasks = [searchTenor(prompt), searchGiphy(prompt)];
+  const results = await Promise.allSettled(tasks);
+  /** @type {{url: string, title: string, tags: string[]}[]} */
+  let combined = [];
+  for (const r of results) {
+    if (r.status === "fulfilled" && Array.isArray(r.value)) {
+      combined = combined.concat(r.value);
+    }
+  }
+  // Deduplicate by URL
+  const seen = new Set();
+  combined = combined.filter(x => {
+    if (seen.has(x.url)) return false;
+    seen.add(x.url); return true;
+  });
+  return combined;
+}
+
 function pickBest(prompt, candidates) {
   let best = candidates[0];
   let bestScore = -Infinity;
@@ -135,7 +182,7 @@ async function showMatch(prompt) {
   setLoading(true);
   dom.matchLabel.textContent = "Finding the perfect Omni‑Man vibe…";
   try {
-    const remote = await searchTenor(prompt);
+    const remote = await searchAllProviders(prompt);
     const pool = (USER_GIFS.length ? USER_GIFS : []).concat(remote.length ? remote : CURATED);
     const best = pickBest(prompt, pool);
     await displayGif(best);
@@ -180,6 +227,11 @@ function bindEvents() {
   dom.promptInput.addEventListener("keydown", ev => {
     if (ev.key === "Enter") onSubmit();
   });
+  // Real-time search as you type (debounced)
+  dom.promptInput.addEventListener("input", debounce(() => {
+    const v = dom.promptInput.value.trim();
+    if (v.length >= 2) showMatch(v);
+  }, 350));
   dom.suggestions?.addEventListener("click", ev => {
     const target = ev.target;
     if (target instanceof HTMLButtonElement && target.dataset.example) {
@@ -214,3 +266,12 @@ function boot() {
 }
 
 boot();
+
+// Small utility: debounce
+function debounce(fn, delayMs) {
+  let t = 0;
+  return function(...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), delayMs);
+  };
+}
