@@ -3,46 +3,57 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sky Typer</title>
+    <title>Omni Prompt — Omni‑Man GIF Matcher</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦸</text></svg>">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <noscript>This game requires JavaScript.</noscript>
+    <noscript>This tool requires JavaScript.</noscript>
 
     <div class="app">
       <header class="app__header">
-        <h1>Sky Typer</h1>
+        <div class="brand">
+          <div class="brand__logo" aria-hidden="true">OM</div>
+          <h1 class="brand__title">Omni Prompt</h1>
+        </div>
+        <div class="badge">Omni‑Man GIFs</div>
       </header>
 
-      <section class="stats" aria-live="polite">
-        <div class="stat">
-          <span class="stat__label">Score</span>
-          <span class="stat__value" id="scoreValue">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat__label">Lives</span>
-          <span class="stat__value" id="livesValue">3</span>
-        </div>
-        <div class="stat">
-          <span class="stat__label">Best</span>
-          <span class="stat__value" id="bestValue">0</span>
-        </div>
-        <button id="resetButton" class="btn btn--ghost" type="button">Reset</button>
-      </section>
+      <main class="tool">
+        <section class="result" aria-live="polite">
+          <div class="result__media" id="resultMedia">
+            <img id="gifImage" class="result__img" alt="Omni‑Man reaction" />
+            <div class="result__shimmer" id="resultShimmer"></div>
+            <button class="result__save btn btn--ghost" id="downloadBtn" type="button" title="Download GIF">Download</button>
+          </div>
+          <div class="result__meta">
+            <div class="match">
+              <span class="match__label">Best match</span>
+              <span class="match__value" id="matchLabel">Try a prompt like “angry but proud”</span>
+            </div>
+          </div>
+        </section>
 
-      <main class="game">
-        <div id="gameArea" class="playfield" aria-label="Falling words playfield"></div>
-        <div class="prompt">
-          <input id="promptInput" class="prompt__input" type="text" placeholder="Type a word and press Enter…" autocomplete="off" spellcheck="false" />
-        </div>
+        <section class="prompt">
+          <div class="prompt__bar">
+            <input id="promptInput" class="prompt__input" type="text" placeholder="Describe the vibe… e.g. 'disappointed yet proud' — press Enter" autocomplete="off" spellcheck="false" />
+            <button id="goButton" class="btn" type="button">Match</button>
+          </div>
+          <div class="suggestions" id="suggestions">
+            <button class="chip" data-example="think, Mark">think, Mark</button>
+            <button class="chip" data-example="angry but composed">angry but composed</button>
+            <button class="chip" data-example="smug and confident">smug and confident</button>
+            <button class="chip" data-example="disappointed yet proud">disappointed yet proud</button>
+            <button class="chip" data-example="menacing eye glow">menacing eye glow</button>
+          </div>
+        </section>
       </main>
 
       <footer class="footer">
-        <span>Made with ❤️</span>
+        <span>Made for fun — Omni‑Man belongs to Invincible</span>
       </footer>
     </div>
 
