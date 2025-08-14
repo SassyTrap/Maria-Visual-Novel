@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cookie Clicker Lite</title>
+    <title>Word Blaster</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -15,39 +15,57 @@
 
     <div class="app">
       <header class="app__header">
-        <h1>Cookie Clicker Lite</h1>
-        <div class="save-indicator" title="Autosave status" aria-label="Autosave status" id="saveIndicator"></div>
+        <h1>Word Blaster</h1>
+        <div class="controls">
+          <button id="startBtn" class="btn" type="button">Start</button>
+          <button id="pauseBtn" class="btn btn--ghost" type="button" disabled>Pause</button>
+          <button id="resetBtn" class="btn btn--ghost" type="button">Reset</button>
+        </div>
       </header>
 
       <section class="stats" aria-live="polite">
         <div class="stat">
-          <span class="stat__label">Cookies</span>
-          <span class="stat__value" id="cookiesCount">0</span>
+          <span class="stat__label">Score</span>
+          <span class="stat__value" id="score">0</span>
         </div>
         <div class="stat">
-          <span class="stat__label">Per Click</span>
-          <span class="stat__value" id="cookiesPerClick">1</span>
+          <span class="stat__label">Streak</span>
+          <span class="stat__value" id="streak">0</span>
         </div>
         <div class="stat">
-          <span class="stat__label">Per Second</span>
-          <span class="stat__value" id="cookiesPerSecond">0</span>
+          <span class="stat__label">Level</span>
+          <span class="stat__value" id="level">1</span>
         </div>
-        <button id="resetButton" class="btn btn--ghost" type="button">Reset</button>
+        <div class="stat">
+          <span class="stat__label">Lives</span>
+          <span class="stat__value" id="lives">3</span>
+        </div>
+        <div class="stat">
+          <span class="stat__label">Accuracy</span>
+          <span class="stat__value" id="accuracy">100%</span>
+        </div>
       </section>
 
       <main class="game">
-        <button id="cookieButton" class="cookie" type="button" aria-label="Big cookie">
-          <span class="cookie__emoji">🍪</span>
-        </button>
+        <div id="playfield" class="playfield" tabindex="0" aria-label="Game area"></div>
       </main>
 
-      <section class="shop">
-        <h2>Shop</h2>
-        <div id="shopList" class="shop__grid"></div>
+      <section class="hint">
+        <span>Type to target a word. Backspace to correct. Space/Esc to switch target.</span>
       </section>
 
+      <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+        <div class="overlay__card">
+          <h2 id="overlayTitle">Paused</h2>
+          <p id="overlayText"></p>
+          <div class="overlay__actions">
+            <button id="overlayBtn" class="btn" type="button">Resume</button>
+          </div>
+        </div>
+      </div>
+
       <footer class="footer">
-        <span>Made with ❤️</span>
+        <span>Made with ❤️ · Type to destroy the words!</span>
       </footer>
     </div>
 
