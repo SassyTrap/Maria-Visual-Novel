@@ -131,7 +131,7 @@ function scoreGif(prompt, item) {
 async function searchTenor(prompt) {
   if (!TENOR_API_KEY) return [];
   const q = encodeURIComponent(`omni man ${prompt}`);
-  const url = `${TENOR_ENDPOINT}?q=${q}&key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=12&media_filter=gif&contentfilter=high`;
+  const url = `${TENOR_ENDPOINT}?q=${q}&key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=12&media_filter=gif,mediumgif,tinygif&contentfilter=high`;
   const resp = await fetch(url);
   if (!resp.ok) return [];
   const data = await resp.json();
@@ -139,13 +139,14 @@ async function searchTenor(prompt) {
   const mapped = [];
   if (Array.isArray(data.results)) {
     for (const r of data.results) {
-      const gif = r.media_formats?.gif?.url || r.media[0]?.gif?.url;
+      const mf = r.media_formats || {};
+      const gif = mf.gif?.url || mf.mediumgif?.url || mf.tinygif?.url || r.media?.[0]?.gif?.url;
       if (!gif) continue;
       const title = (r.content_description || r.title || "Omni‑Man").trim();
       mapped.push({ url: gif, title, tags: tokenize(`${title} ${prompt} omni man`) });
     }
   }
-  // Always filter to only omni-man content by title or description heuristic
+  // Ensure only Omni‑Man content
   return mapped.filter(m => /omni.?man|invincible|nolan/i.test(m.title) || /omni/i.test(m.title));
 }
 
@@ -156,7 +157,6 @@ function pickBest(prompt, candidates) {
     const s = scoreGif(prompt, c);
     if (s > bestScore) { best = c; bestScore = s; }
   }
-  // fall back to curated best match if score is poor
   if (bestScore < 3) {
     return pickBest(prompt, CURATED);
   }
@@ -178,10 +178,7 @@ async function showMatch(prompt) {
     dom.matchLabel.textContent = best.title;
     dom.downloadBtn.onclick = () => downloadGif(best.url, friendlyFilename(prompt, best.title));
   } catch (e) {
-    const best = pickBest(prompt, CURATED);
-    await displayGif(best);
-    dom.matchLabel.textContent = best.title;
-    dom.downloadBtn.onclick = () => downloadGif(best.url, friendlyFilename(prompt, best.title));
+    dom.matchLabel.textContent = "Could not load GIF. Check your internet or ad‑blockers.";
   } finally {
     setLoading(false);
   }
